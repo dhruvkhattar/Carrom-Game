@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<title>Carrom</title>
+	<script type="text/javascript" src="./three.js"></script>
+	<script type="text/javascript" src="./dat.gui.js"></script>
+	<style>
+		body {
+			/* set margin to 0 and overflow to hidden, to go fullscreen */
+			margin: 0;
+			overflow: hidden;
+		}
+	</style>
+</head>
+<body>
+	<!-- Div which will hold the Output -->
+	<div id="WebGL-output">
+	</div>
+
+	<!-- Javascript code that runs our Three.js examples -->
+	<script type="text/javascript">
+
+    // once everything is loaded, we run our Three.js stuff.
+    function init() {
+    	d = new Date();
+        oldt = d.getTime();
+
+        // create a scene, that will hold all our elements such as objects, cameras and lights.
+        var scene = new THREE.Scene();
+
+        // create a camera, which defines where we're looking at.
+        var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        // create a render and set the size
+        var renderer = new THREE.WebGLRenderer();
+
+        renderer.setClearColor(new THREE.Color(0xEEEEEE, 1.0));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMapEnabled = true;
+
+        // create the ground plane
+        var planeGeometry = new THREE.PlaneGeometry(75, 75, 1, 1);
+        var planeMaterial =  new THREE.MeshPhongMaterial( { map: THREE.ImageUtils.loadTexture('./carrom.jpg') } );
+        //new THREE.MeshLambertMaterial({color: 0xffffff});
+        var plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.receiveShadow = true;
+
+        // rotate and position the plane
+        plane.rotation.x = -0.5 * Math.PI;
+        plane.position.x = 0;
+        plane.position.y = 0;
+        plane.position.z = 0;
+
+        // add the plane to the scene
+        scene.add(plane);
+
+		// create a cylinder
+		var strikerGeometry = new THREE.CylinderGeometry(2, 2, 2, 60);
+		var strikerMaterial = new THREE.MeshLambertMaterial({color: 0x0000ff});
+		var striker = new THREE.Mesh(strikerGeometry, strikerMaterial);
+		striker.castShadow = true;
+
+        // position the cube
+        striker.position.x = 21;
+        striker.position.y = 0;
+        striker.position.z = 0;
+
+        // add the cube to the scene
+        scene.add(striker);
+
+        var bcoin = [];
+        var bx = [];
+        var bz = [];
+        for (var i = 0; i < 4; i++) 
+        {
+        	var bcoinGeometry = new THREE.CylinderGeometry(1.75, 1.75, 1, 32);
+        	var bcoinMaterial = new THREE.MeshLambertMaterial({color: 0x000000});
+        	bcoin[i] = new THREE.Mesh(bcoinGeometry, bcoinMaterial);
+        	bcoin.castShadow = true;
+
+        	bcoin[i].position.x = 6*Math.cos((Math.PI/2)*i);
+        	bcoin[i].position.z = 6*Math.sin((Math.PI/2)*i);
+        	bcoin[i].position.y = 0;
+        	bx[i] = 0;
+        	bz[i] = 0;
+        	scene.add(bcoin[i]);
+        };
+
+        var qflag = 0;
+        var win = 0;
+        var wcoin = [];
+        var wx = [];
+        var wz = [];
+        for (var i = 0; i < 4; i++) 
+        {
+        	var wcoinGeometry = new THREE.CylinderGeometry(1.75, 1.75, 1, 32);
+        	var wcoinMaterial = new THREE.MeshLambertMaterial({color: 0xffffff});
+        	wcoin[i] = new THREE.Mesh(wcoinGeometry, wcoinMaterial);
+        	wcoin.castShadow = true;
+
+        	wcoin[i].position.x = 6*Math.cos(Math.PI/4 + (Math.PI/2)*i);
+        	wcoin[i].position.z = 6*Math.sin(Math.PI/4 + (Math.PI/2)*i);
+        	wcoin[i].position.y = 0;
+        	wx[i] = 0;
+        	wz[i] = 0;
+        	scene.add(wcoin[i]);
+        };
+
+        var queenGeometry = new THREE.CylinderGeometry(1.75, 1.75, 1, 32);
+        var queenMaterial = new THREE.MeshLambertMaterial({color: 0xff0000});
+        var queen = new THREE.Mesh(queenGeometry, queenMaterial);
+        queen.castShadow = true;
+
+        queen.position.x = 0;
+        queen.position.y = 0;
+        queen.position.z = 0;
+
+        scene.add(queen);
+        var qx = 0;
+        var qz = 0;
+
+        var lineGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 32);
+        var lineMaterial = new THREE.MeshLambertMaterial({color: 0x000000});
+        var line = new THREE.Mesh(lineGeometry, lineMaterial);
+        line.castShadow = true;
+
+        line.rotation.z = -0.5 * Math.PI;
+        line.rotation.y	= 0;
+        line.position.x = 21;
+        line.position.y = 0;
+        line.position.z = 0;
+
+        scene.add(line);
+
+        var addz = 0;
+        var shoot = false;
+        var speedx = 0;
+        var speedz = 0;
+        var cameraflag = 0;
+
+        // position and point the camera to the center of the scene
+        camera.position.x = 0;
+        camera.position.y = 100;
+        camera.position.z = 0;
+        camera.lookAt(scene.position);
+
+        // add subtle ambient lighting
+        var ambientLight = new THREE.AmbientLight(0x0c0c0c);
+        scene.add(ambientLight);
+
+        // add spotlight for the shadows
+        var spotLight = new THREE.SpotLight(0xffffff);
+        spotLight.position.set(-40, 60, -10);
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+        // add the output of the renderer to the html element
+        document.getElementById("WebGL-output").appendChild(renderer.domElement);
+
+        // call the render function
+        var step = 0;
+
+        var controls = new function () {
+        	this.Speed = 6;
+        	this.Angle = 0;
+        	this.Score = 100;
+        };
+
+        var gui = new dat.GUI();
+        gui.add(controls, 'Speed', 0, 10).listen();
+        gui.add(controls, 'Angle', 0, 360).listen();
+        gui.add(controls, 'Score').listen();
+
+        render();
+
+        function render() {
+        	d = new Date();
+            newt = d.getTime();
+        	if(newt - oldt >= 5000)
+        	{
+        		controls.Score -= 1;
+        		oldt += 5000;
+        	}
+        	line.rotation.y = (Math.PI/180)*controls.Angle;
+        	if(cameraflag === 0)
+        	{
+        		camera.position.x = 0;
+        		camera.position.y = 100;
+        		camera.position.z = 0;
+        		camera.lookAt(scene.position);	
+        	}
+        	else if(cameraflag === 1)
+        	{
+        		camera.position.x = 60;
+        		camera.position.y = 60;
+        		camera.position.z = 0;
+        		camera.lookAt(scene.position);
+        	}
+        	else if(cameraflag === 2)
+        	{
+        		camera.position.x = queen.position.x;
+        		camera.position.y = queen.position.y+5;
+        		camera.position.z = queen.position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 3)
+        	{
+        		camera.position.x = bcoin[0].position.x;
+        		camera.position.y = bcoin[0].position.y+5;
+        		camera.position.z = bcoin[0].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 4)
+        	{
+        		camera.position.x = bcoin[1].position.x;
+        		camera.position.y = bcoin[1].position.y+5;
+        		camera.position.z = bcoin[1].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 5)
+        	{
+        		camera.position.x = bcoin[2].position.x;
+        		camera.position.y = bcoin[2].position.y+5;
+        		camera.position.z = bcoin[2].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 6)
+        	{
+        		camera.position.x = bcoin[3].position.x;
+        		camera.position.y = bcoin[3].position.y+5;
+        		camera.position.z = bcoin[3].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 7)
+        	{
+        		camera.position.x = wcoin[0].position.x;
+        		camera.position.y = wcoin[0].position.y+5;
+        		camera.position.z = wcoin[0].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 8)
+        	{
+        		camera.position.x = wcoin[1].position.x;
+        		camera.position.y = wcoin[1].position.y+5;
+        		camera.position.z = wcoin[1].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 9)
+        	{
+        		camera.position.x = wcoin[2].position.x;
+        		camera.position.y = wcoin[2].position.y+5;
+        		camera.position.z = wcoin[2].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	else if(cameraflag === 10)
+        	{
+        		camera.position.x = wcoin[3].position.x;
+        		camera.position.y = wcoin[3].position.y+5;
+        		camera.position.z = wcoin[3].position.z;
+        		camera.lookAt(striker.position);
+        	}
+        	if(shoot === true)
+        	{
+
+        		var tempx;
+        		var tempz;
+        		var newx1;
+        		var newz1;
+        		var newx2;
+        		var newz2;
+
+        		//striker coin
+        		for (var i = 0; i < 4; i++) 
+        		{
+        			if( ((striker.position.x - bcoin[i].position.x)*(striker.position.x - bcoin[i].position.x) + (striker.position.z - bcoin[i].position.z)*(striker.position.z - bcoin[i].position.z)) <= 3.75*3.75 )
+        			{
+ 						newx1 = ((speedx*(4 - 1.75*1.75) + (2*1.75*1.75*bx[i]))/(4 + 1.75*1.75));
+						newz1 = ((speedz*(4 - 1.75*1.75) + (2*1.75*1.75*bz[i]))/(4 + 1.75*1.75));
+						newx2 = ((bx[i]*(1.75*1.75 - 4) + (2*4*speedx))/(4 + 1.75*1.75));
+						newz2 = ((bz[i]*(1.75*1.75 - 4) + (2*4*speedz))/(4 + 1.75*1.75));
+        				
+        				speedz = newz1;
+        				speedx = newx1;
+        				bx[i] = newx2;
+        				bz[i] = newz2;
+        			}
+
+        			if( ((striker.position.x - wcoin[i].position.x)*(striker.position.x - wcoin[i].position.x) + (striker.position.z - wcoin[i].position.z)*(striker.position.z - wcoin[i].position.z)) <= 3.75*3.75 )
+        			{
+        				newx1 = (speedx * (4 - 1.75*1.75) + (2 * 1.75*1.75 * wx[i])) / (4 + 1.75*1.75);
+						newz1 = (speedz * (4 - 1.75*1.75) + (2 * 1.75*1.75 * wz[i])) / (4 + 1.75*1.75);
+						newx2 = (wx[i] * (1.75*1.75 - 4) + (2 * 4 * speedx)) / (4 + 1.75*1.75);
+						newz2 = (wz[i] * (1.75*1.75 - 4) + (2 * 4 * speedz)) / (4 + 1.75*1.75);
+        				
+        				speedz = newz1;
+        				speedx = newx1;
+        				wx[i] = newx2;
+        				wz[i] = newz2;
+        			}
+
+        			if( ((queen.position.x - bcoin[i].position.x)*(queen.position.x - bcoin[i].position.x) + (queen.position.z - bcoin[i].position.z)*(queen.position.z - bcoin[i].position.z)) <= 3.75*3.75 )
+        			{
+        				tempx = qx;
+        				tempz = qz;
+        				qz = bz[i];
+        				qx = bx[i];
+        				bx[i] = tempx;
+        				bz[i] = tempz;
+        			}
+
+        			if( ((queen.position.x - wcoin[i].position.x)*(queen.position.x - wcoin[i].position.x) + (queen.position.z - wcoin[i].position.z)*(queen.position.z - wcoin[i].position.z)) <= 3.5*3.5 )
+        			{
+        				tempx = qx;
+        				tempz = qz;
+        				qz = wz[i];
+        				qx = wx[i];
+        				wx[i] = tempx;
+        				wz[i] = tempz;
+        			}
+        		}
+
+        		if( ((striker.position.x - queen.position.x)*(striker.position.x - queen.position.x) + (striker.position.z - queen.position.z)*(striker.position.z - queen.position.z)) <= 3.75*3.75 )
+        		{
+        			newx1 = (speedx * (4 - 1.75*1.75) + (2 * 1.75*1.75 * qx)) / (4 + 1.75*1.75);
+					newz1 = (speedz * (4 - 1.75*1.75) + (2 * 1.75*1.75 * qz)) / (4 + 1.75*1.75);
+					newx2 = (qx * (1.75*1.75 - 4) + (2 * 4 * speedx)) / (4 + 1.75*1.75);
+					newz2 = (qz * (1.75*1.75 - 4) + (2 * 4 * speedz)) / (4 + 1.75*1.75);
+       				
+        			speedz = newz1;
+        			speedx = newx1;
+        			qx = newx2;
+        			qz = newz2;
+        		}
+
+        		for(var i = 0; i < 4 ; i++)
+        		{
+        			for(var j = 0; j < 4; j++)
+        			{
+        				if( ((wcoin[j].position.x - wcoin[i].position.x)*(wcoin[j].position.x - wcoin[i].position.x) + (wcoin[j].position.z - wcoin[i].position.z)*(wcoin[j].position.z - wcoin[i].position.z)) <= 3.5*3.5 )
+        				{
+        					tempx = wx[j];
+        					tempz = wz[j];
+        					wx[j] = wz[i];
+        					wz[j] = wx[i];
+        					wx[i] = tempx;
+        					wz[i] = tempz;
+        				}
+        				if( ((bcoin[j].position.x - bcoin[i].position.x)*(bcoin[j].position.x - bcoin[i].position.x) + (bcoin[j].position.z - bcoin[i].position.z)*(bcoin[j].position.z - bcoin[i].position.z)) <= 3.5*3.5 )
+        				{
+        					tempx = bx[j];
+        					tempz = bz[j];
+        					bx[j] = bz[i];
+        					bz[j] = bx[i];
+        					bx[i] = tempx;
+        					bz[i] = tempz;
+        				}
+        				if( ((bcoin[j].position.x - wcoin[i].position.x)*(bcoin[j].position.x - wcoin[i].position.x) + (bcoin[j].position.z - wcoin[i].position.z)*(bcoin[j].position.z - wcoin[i].position.z)) <= 3.5*3.5 )
+        				{
+        					tempx = bx[j];
+        					tempz = bz[j];
+        					bx[j] = wz[i];
+        					bz[j] = wx[i];
+        					wx[i] = tempx;
+        					wz[i] = tempz;
+        				}
+        			}
+        		}
+
+        		for (var i = 0; i < 4 ; i++)
+        		{
+        			bx[i] *= 0.96;
+        			bz[i] *= 0.96;
+        			wx[i] *= 0.96;
+        			wz[i] *= 0.96;
+        			bcoin[i].position.x += bx[i];
+        			bcoin[i].position.z += bz[i];
+        			wcoin[i].position.x += wx[i];
+        			wcoin[i].position.z += wz[i];
+        			if(bcoin[i].position.z >= 29)
+        			{
+        				bcoin[i].position.z = 29;
+        				bz[i] *= -1;
+        			}
+        			if(bcoin[i].position.z <= -29)
+        			{
+        				bcoin[i].position.z = -29;
+        				bz[i] *= -1;
+        			}
+        			if(bcoin[i].position.x >= 29)
+        			{
+        				bcoin[i].position.x = 29;
+        				bx[i] *= -1;
+        			}
+        			if(bcoin[i].position.x <= -29)
+        			{
+        				bcoin[i].position.x = -29;
+        				bx[i] *= -1;
+        			}
+        			if(wcoin[i].position.z >= 29)
+        			{
+        				wcoin[i].position.z = 29;
+        				wz[i] *= -1;
+        			}
+        			if(wcoin[i].position.z <= -29)
+        			{
+        				wcoin[i].position.z = -29;
+        				wz[i] *= -1;
+        			}
+        			if(wcoin[i].position.x >= 29)
+        			{
+        				wcoin[i].position.x = 29;
+        				wx[i] *= -1;
+        			}
+        			if(wcoin[i].position.x <= -29)
+        			{
+        				wcoin[i].position.x = -29;
+        				wx[i] *= -1;
+        			}
+        		};
+
+        		qx *= 0.96;
+        		qz *= 0.96;
+        		queen.position.x += qx;
+        		queen.position.z += qz;
+
+        		if(queen.position.x <= -29)
+        		{
+        			queen.position.x = -29;
+        			qx *= -1;
+        		}
+        		if(queen.position.x >= 29)
+        		{
+        			queen.position.x = 29;
+        			qx *= -1;
+        		}
+        		if(queen.position.z <= -29)
+        		{
+        			queen.position.z = -29;
+        			qz *= -1;
+        		}
+        		if(queen.position.z >= 29)
+        		{
+        			queen.position.z = 29;
+        			qz *= -1;
+        		}
+
+        		if(Math.abs(speedx) <= 0.0001 && Math.abs(speedz) <= 0.0001 && Math.abs(qz) <= 0.0001 && Math.abs(qx) <= 0.0001)
+        		{
+        			var flag = 0;
+        			for(var i = 0 ; i<4 ; i++)
+        			{
+        					if(Math.abs(bx[i]) > 0.0001 || Math.abs(bz[i]) > 0.0001)
+        						flag = 1;
+        					if(Math.abs(wx[i]) > 0.0001 || Math.abs(wz[i]) > 0.0001)
+        						flag = 1;
+        			}
+        			if(flag === 0)
+	        		{
+	        			if(qflag === 1)
+	        				qflag = 2;
+	        			else if(qflag === 2 && win === 0)
+	        			{
+	        				scene.add(queen);
+	        				queen.position.x = 0;
+        					queen.position.y = 0;
+        					queen.position.z = 0;
+	        				controls.Score -= 20;
+	        				qflag = 0;
+	        			}
+	        			win = 0;
+	        			shoot = false;
+	        			striker.position.x = 21;
+	        			striker.position.z = 0;
+	        			line.position.x = 21;
+	        			line.position.z = 0;
+	        			bx[0] = bz[0] = 0;
+	        			bx[1] = bz[1] = 0;
+	        			bx[2] = bz[2] = 0;
+	        			bx[3] = bz[3] = 0;
+		      			wx[0] = wz[0] = 0;
+	        			wx[1] = wz[1] = 0;
+	        			wx[2] = wz[2] = 0;
+	        			wx[3] = wz[3] = 0;
+	        			qx = qz = 0;
+					}
+        		}
+
+        		speedz *= 0.96;
+        		speedx *= 0.96;
+        		striker.position.z += speedz;
+        		striker.position.x += speedx;
+        		if(striker.position.z >= 29)
+        		{
+        			striker.position.z = 29;
+        			speedz *= -1;
+        		}
+        		if(striker.position.z <= -29)
+        		{
+        			striker.position.z = -29;
+        			speedz *= -1;
+        		}
+        		if(striker.position.x >= 29)
+        		{
+        			striker.position.x = 29;
+        			speedx *= -1;
+        		}
+        		if(striker.position.x <= -29)
+        		{
+        			striker.position.x = -29;
+        			speedx *= -1;
+        		}
+
+        		if( (striker.position.x >= 28 && striker.position.z >= 28) || (striker.position.x <= -28 && striker.position.z <= -28) || (striker.position.x <= -28 && striker.position.z >= 28) || (striker.position.x >= 28 && striker.position.z <= -28))
+        		{
+        			shoot = false;
+        			striker.position.x = 21;
+        			striker.position.z = 0;
+        			line.position.x = 21;
+        			line.position.z = 0;
+        			bx[0] = bz[0] = 0;
+        			bx[1] = bz[1] = 0;
+        			bx[2] = bz[2] = 0;
+        			bx[3] = bz[3] = 0;
+	      			wx[0] = wz[0] = 0;
+        			wx[1] = wz[1] = 0;
+        			wx[2] = wz[2] = 0;
+        			wx[3] = wz[3] = 0;
+        			qx = qz = 0;	
+        			controls.Score -= 20;
+        		}
+        		if( (queen.position.x >= 28 && queen.position.z >= 28) || (queen.position.x <= -28 && queen.position.z <= -28) || (queen.position.x <= -28 && queen.position.z >= 28) || (queen.position.x >= 28 && queen.position.z <= -28))
+        		{
+        			scene.remove(queen);
+        			queen.position.x = 0;
+        			queen.position.y = 0;
+        			queen.position.z = 0;
+        			controls.Score += 20;
+        			qflag = 1;
+        		}
+        		for(var i = 0; i < 4; i++ )
+        		{
+					if( (wcoin[i].position.x >= 28 && wcoin[i].position.z >= 28) || (wcoin[i].position.x <= -28 && wcoin[i].position.z <= -28) || (wcoin[i].position.x <= -28 && wcoin[i].position.z >= 28) || (wcoin[i].position.x >= 28 && wcoin[i].position.z <= -28))
+					{
+						win = 1;
+						scene.remove(wcoin[i]);
+        				wcoin[i].position.x = 0;
+        				wcoin[i].position.y = 0;
+        				wcoin[i].position.z = 0;
+        				controls.Score += 5;
+					}
+					if( (bcoin[i].position.x >= 28 && bcoin[i].position.z >= 28) || (bcoin[i].position.x <= -28 && bcoin[i].position.z <= -28) || (bcoin[i].position.x <= -28 && bcoin[i].position.z >= 28) || (bcoin[i].position.x >= 28 && bcoin[i].position.z <= -28))
+        			{
+        				win = 1;
+        				scene.remove(bcoin[i]);
+        				bcoin[i].position.x = 0;
+        				bcoin[i].position.y = 0;
+        				bcoin[i].position.z = 0;
+        				controls.Score -= 20;
+        			}
+        		}        		
+        	}
+        	else
+        	{
+        		striker.position.z += addz;
+        		line.position.z += addz;
+        		if(striker.position.z >= 18)
+        		{
+        			striker.position.z = 18;
+        		}
+        		if(striker.position.z <= -18)
+        		{
+        			striker.position.z = -18;
+        		}
+        		if(line.position.z >= 18)
+        		{
+        			line.position.z = 18;
+        		}
+        		if(line.position.z <= -18)
+        		{
+        			line.position.z = -18;
+        		}
+        	}
+            // render using requestAnimationFrame
+            requestAnimationFrame(render);
+            renderer.render(scene, camera);
+        }
+
+        function keyDown(e) {
+        	if(e.keyCode === 32)
+        	{
+        		shoot = true;
+        		speedz = controls.Speed*Math.cos(line.rotation.y - Math.PI/2);
+        		speedx = controls.Speed*Math.sin(line.rotation.y - Math.PI/2);
+        	}
+        	else if(e.keyCode === 37)
+        		addz = 1;
+        	else if(e.keyCode === 39)
+        		addz = -1;
+        	else if(e.keyCode === 65)
+        	{
+        		controls.Angle += 1;
+        		if(controls.Angle > 360)
+        			controls.Angle -= 360;
+        	}
+        	else if(e.keyCode === 68)
+        	{
+        		controls.Angle -= 1;
+ 				if(controls.Angle < 0)
+ 					controls.Angle += 360;
+ 			}
+        	else if(e.keyCode === 86)
+        		cameraflag = (cameraflag + 1)%11;
+        	else if(e.keyCode === 87)
+        	{
+        		controls.Speed += 0.1;
+        		if(controls.Speed >= 10)
+        			controls.Speed = 10;
+        	}
+        	else if(e.keyCode === 83)
+        	{
+        		controls.Speed -= 0.1;
+        		if(controls.Speed <= 0)
+        			controls.Speed = 0;
+        	}
+
+        }
+
+        function keyUp(e){
+        	if(e.keyCode === 37)     
+        		addz = 0;
+        	else if(e.keyCode === 39)     
+        		addz = 0;
+        }
+
+        document.addEventListener("DOMMouseScroll", function(event){
+
+        	if(event.detail==3)
+        	{
+        		controls.Speed -= 0.1;
+        		if(controls.Speed <= 0)
+        			controls.Speed = 0;
+        	}
+        	if(event.detail==-3)
+        	{
+        		controls.Speed += 0.1;
+        		if(controls.Speed >= 10)
+        			controls.Speed = 10;
+        	}
+
+        });
+
+
+        window.addEventListener("keydown", keyDown, false);
+        window.addEventListener("keyup", keyUp, false);
+    }
+    window.onload = init;
+
+
+</script>
+</body>
+</html>
